@@ -13,27 +13,46 @@ export class LogsRepository {
       const serviceRecord = await db('services').where('slug', service).first();
       if (serviceRecord) {
         query = query.where('service_id', serviceRecord.id);
+      } else {
+        query = query.whereRaw('1 = 0');
       }
     }
 
-    if (statusCode) {
-      query = query.orWhere('status_code', statusCode);
+    if (statusCode !== undefined && statusCode !== null) {
+      if (statusCode >= 1 && statusCode <= 9) {
+        // Status class prefix (e.g., 2 -> 200..299, 4 -> 400..499, 5 -> 500..599)
+        const minStatus = statusCode * 100;
+        const maxStatus = minStatus + 99;
+        query = query.whereBetween('status_code', [minStatus, maxStatus]);
+      } else {
+        // Exact status code (e.g., 200, 404, 500)
+        query = query.where('status_code', statusCode);
+      }
     }
 
     if (from && to) {
       query = query.whereBetween('created_at', [from, to]);
+    } else if (from) {
+      query = query.where('created_at', '>=', from);
+    } else if (to) {
+      query = query.where('created_at', '<=', to);
     }
 
     if (search) {
       query = query.where('endpoint', 'like', `%${search}%`);
     }
 
-    const total = await query.clone().count('* as count').first() as any;
-    const offset = page * limit;
+    const totalResult = await query.clone().count('* as count').first() as any;
+    const total = parseInt(totalResult?.count || '0', 10);
+    const validPage = Math.max(1, page);
+    const validLimit = Math.max(1, limit);
+    const offset = (validPage - 1) * validLimit;
+    const pages = Math.max(1, Math.ceil(total / validLimit));
 
     const logs = await query
       .orderBy('created_at', 'desc')
-      .limit(limit)
+      .orderBy('id', 'desc')
+      .limit(validLimit)
       .offset(offset);
 
     for (const log of logs) {
@@ -42,12 +61,13 @@ export class LogsRepository {
     }
 
     return {
+      data: logs as ApiLog[],
       logs: logs as ApiLog[],
       meta: {
-        page,
-        limit,
-        total: total.count,
-        pages: Math.ceil(total.count / limit),
+        page: validPage,
+        limit: validLimit,
+        total,
+        pages,
       } as PaginationMeta,
     };
   }

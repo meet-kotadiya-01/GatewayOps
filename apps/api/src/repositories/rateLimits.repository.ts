@@ -6,25 +6,37 @@ export class RateLimitsRepository {
     let query = db('rate_limit_violations');
     if (from && to) {
       query = query.whereBetween('created_at', [from, to]);
+    } else if (from) {
+      query = query.where('created_at', '>=', from);
+    } else if (to) {
+      query = query.where('created_at', '<=', to);
     }
 
-    const totalViolations = await query.clone().count('*').first() as any;
+    const totalViolationsResult = await query.clone().count('* as count').first() as any;
+    const totalViolations = parseInt(totalViolationsResult?.count || '0', 10);
 
     let requestsQuery = db('rate_limit_violations');
     if (from && to) {
       requestsQuery = requestsQuery.whereBetween('window_start', [from, to]);
+    } else if (from) {
+      requestsQuery = requestsQuery.where('window_start', '>=', from);
+    } else if (to) {
+      requestsQuery = requestsQuery.where('window_start', '<=', to);
     }
-    const requestsResult = await requestsQuery.sum('request_count').first() as any;
-    const totalRequests = requestsResult.sum || 0;
+    const requestsResult = await requestsQuery.sum('request_count as sum').first() as any;
+    const totalRequests = parseFloat(requestsResult?.sum || '0');
 
     const windowSeconds = from && to 
       ? (new Date(to).getTime() - new Date(from).getTime()) / 1000
       : 3600;
-    const totalMinutes = Math.floor(windowSeconds / 60);
-    const rpm = totalMinutes > 0 ? Math.floor(totalRequests / totalMinutes) : 0;
+
+    const validWindowSeconds = !isNaN(windowSeconds) && windowSeconds > 0 ? windowSeconds : 60;
+    const rpm = totalRequests > 0 
+      ? Math.round(((totalRequests * 60) / validWindowSeconds) * 100) / 100 
+      : 0;
 
     return {
-      total_violations: totalViolations.count,
+      total_violations: totalViolations,
       requests_per_minute: rpm,
       peak_rpm: 0,
     };
@@ -34,6 +46,10 @@ export class RateLimitsRepository {
     let query = db('rate_limit_violations');
     if (from && to) {
       query = query.whereBetween('created_at', [from, to]);
+    } else if (from) {
+      query = query.where('created_at', '>=', from);
+    } else if (to) {
+      query = query.where('created_at', '<=', to);
     }
     return await query.orderBy('created_at', 'desc');
   }

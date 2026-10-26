@@ -8,8 +8,9 @@ const metricsService = new MetricsService();
 export class MetricsController {
   async getSummary(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { from, to } = req.query as { from?: string; to?: string };
-      const summary = await metricsService.getSummary(from, to);
+      const { from, to, refresh } = req.query as { from?: string; to?: string; refresh?: string };
+      const shouldRefresh = refresh === 'true' || refresh === '1';
+      const summary = await metricsService.getSummary(from, to, shouldRefresh);
       res.json({ data: summary });
     } catch (error) {
       next(error);

@@ -7,52 +7,72 @@ export class MetricsRepository {
 
     if (from && to) {
       query = query.whereBetween('created_at', [from, to]);
+    } else if (from) {
+      query = query.where('created_at', '>=', from);
+    } else if (to) {
+      query = query.where('created_at', '<=', to);
     }
 
-    const countResult = await query.clone().count('*').first() as any;
-    const totalRequests = countResult.count;
+    const countResult = await query.clone().count('* as count').first() as any;
+    const totalRequests = parseInt(countResult?.count || '0', 10);
 
     let failedQuery = db('api_logs');
     if (from && to) {
       failedQuery = failedQuery.whereBetween('created_at', [from, to]);
+    } else if (from) {
+      failedQuery = failedQuery.where('created_at', '>=', from);
+    } else if (to) {
+      failedQuery = failedQuery.where('created_at', '<=', to);
     }
     const failedResult = await failedQuery
       .where('status_code', '>=', 400)
-      .count('*')
+      .count('* as count')
       .first() as any;
-    const failedRequests = failedResult.count;
+    const failedRequests = parseInt(failedResult?.count || '0', 10);
 
     const successRate = totalRequests > 0 
-      ? Math.round((totalRequests - failedRequests) / totalRequests * 100)
+      ? Math.round(((totalRequests - failedRequests) / totalRequests) * 100)
       : 100;
 
     let authFailuresQuery = db('auth_events')
       .where('event_type', 'login_failure');
     if (from && to) {
       authFailuresQuery = authFailuresQuery.whereBetween('created_at', [from, to]);
+    } else if (from) {
+      authFailuresQuery = authFailuresQuery.where('created_at', '>=', from);
+    } else if (to) {
+      authFailuresQuery = authFailuresQuery.where('created_at', '<=', to);
     }
-    const authFailures = await authFailuresQuery.count('*').first() as any;
+    const authFailures = await authFailuresQuery.count('* as count').first() as any;
 
     let latencyQuery = db('api_logs');
     if (from && to) {
       latencyQuery = latencyQuery.whereBetween('created_at', [from, to]);
+    } else if (from) {
+      latencyQuery = latencyQuery.where('created_at', '>=', from);
+    } else if (to) {
+      latencyQuery = latencyQuery.where('created_at', '<=', to);
     }
-    const latencyResult = await latencyQuery.avg('latency_ms').first() as any;
-    const avgResponseTime = Math.round(latencyResult.avg || 0);
+    const latencyResult = await latencyQuery.avg('latency_ms as avg').first() as any;
+    const avgResponseTime = Math.round(parseFloat(latencyResult?.avg || '0'));
 
     let violationsQuery = db('rate_limit_violations');
     if (from && to) {
       violationsQuery = violationsQuery.whereBetween('created_at', [from, to]);
+    } else if (from) {
+      violationsQuery = violationsQuery.where('created_at', '>=', from);
+    } else if (to) {
+      violationsQuery = violationsQuery.where('created_at', '<=', to);
     }
-    const violations = await violationsQuery.count('*').first() as any;
+    const violations = await violationsQuery.count('* as count').first() as any;
 
     return {
       total_requests: totalRequests,
       failed_requests: failedRequests,
       success_rate: successRate,
-      auth_failures: authFailures.count,
+      auth_failures: parseInt(authFailures?.count || '0', 10),
       avg_response_time: avgResponseTime,
-      rate_limit_violations: violations.count,
+      rate_limit_violations: parseInt(violations?.count || '0', 10),
     };
   }
 
@@ -68,6 +88,10 @@ export class MetricsRepository {
 
     if (from && to) {
       query = query.whereBetween('created_at', [from, to]);
+    } else if (from) {
+      query = query.where('created_at', '>=', from);
+    } else if (to) {
+      query = query.where('created_at', '<=', to);
     }
 
     const result = await query
@@ -88,6 +112,10 @@ export class MetricsRepository {
 
     if (from && to) {
       query = query.whereBetween('created_at', [from, to]);
+    } else if (from) {
+      query = query.where('created_at', '>=', from);
+    } else if (to) {
+      query = query.where('created_at', '<=', to);
     }
 
     const result = await query
@@ -109,6 +137,10 @@ export class MetricsRepository {
 
     if (from && to) {
       query = query.whereBetween('api_logs.created_at', [from, to]);
+    } else if (from) {
+      query = query.where('api_logs.created_at', '>=', from);
+    } else if (to) {
+      query = query.where('api_logs.created_at', '<=', to);
     }
 
     const results = await query.orderBy('request_count', 'desc');
@@ -120,7 +152,7 @@ export class MetricsRepository {
       return {
         service: row.name,
         request_count: count,
-        percentage: Math.round((count / total) * 100),
+        percentage: total > 0 ? Math.round((count / total) * 100) : 0,
       };
     });
   }
@@ -159,13 +191,13 @@ export class MetricsRepository {
       .first() as any;
 
     return {
-      total_requests_2xx: result2xx.count,
-      total_requests_4xx: result4xx.count,
-      total_requests_5xx: result5xx.count,
+      total_requests_2xx: parseInt(result2xx?.count || '0', 10),
+      total_requests_4xx: parseInt(result4xx?.count || '0', 10),
+      total_requests_5xx: parseInt(result5xx?.count || '0', 10),
       peak_rpm: 0,
       slowest_endpoint: {
         endpoint: slowest?.endpoint || '',
-        avg_latency: Math.round(slowest?.avg_latency || 0),
+        avg_latency: Math.round(parseFloat(slowest?.avg_latency || '0')),
       },
       busiest_service: {
         name: busiest?.name || '',
